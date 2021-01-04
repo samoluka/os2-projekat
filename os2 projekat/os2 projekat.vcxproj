@@ -22,6 +22,7 @@
     <None Include="..\Projektni zadatak - 2021 v1.0.pdf" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="slab.c" />
     <ClCompile Include="Source.c" />
   </ItemGroup>
   <ItemGroup>
@@ -94,7 +95,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
-      <SDLCheck>true</SDLCheck>
+      <SDLCheck>false</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
     </ClCompile>

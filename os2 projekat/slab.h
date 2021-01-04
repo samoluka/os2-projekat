@@ -1,12 +1,21 @@
 #pragma once
 // File: slab.h
 #include <stdlib.h>
+
+int num_of_blocks;
+void* startAdr;
+typedef struct kmem_cache_t_header {
+	const char* cache_name;
+	size_t cache_size;
+	void* cache_ctor;
+	void* cache_dtor;
+}kmem_cache_t_header;
 typedef struct kmem_cache_s {
-
-
-}kmem_cache_t;
+	kmem_cache_t_header header;
+} kmem_cache_t;
 #define BLOCK_SIZE (4096)
 #define CACHE_L1_LINE_SIZE (64)
+#define MAX_NAME_SIZE (16)
 void kmem_init(void* space, int block_num);
 
 kmem_cache_t* kmem_cache_create(const char* name, size_t size, void (*ctor)(void*), void (*dtor)(void*)); // Allocate cache
