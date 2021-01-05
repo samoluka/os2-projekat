@@ -4,14 +4,24 @@
 
 int num_of_blocks;
 void* startAdr;
+void* head;
+void* tail;
 typedef struct kmem_cache_t_header {
 	const char* cache_name;
 	size_t cache_size;
 	void* cache_ctor;
 	void* cache_dtor;
+	void* next;
+	unsigned int num_of_slabs;
 }kmem_cache_t_header;
+typedef struct kmem_cache_t_obj {
+	void* next;
+}kmem_cache_t_obj;
 typedef struct kmem_cache_s {
 	kmem_cache_t_header header;
+	kmem_cache_t_obj* head;
+	kmem_cache_t_obj* tail;
+	unsigned int num_of_obj;
 } kmem_cache_t;
 #define BLOCK_SIZE (4096)
 #define CACHE_L1_LINE_SIZE (64)
