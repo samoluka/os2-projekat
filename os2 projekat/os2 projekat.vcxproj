@@ -22,10 +22,12 @@
     <None Include="..\Projektni zadatak - 2021 v1.0.pdf" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="budyy.c" />
     <ClCompile Include="slab.c" />
     <ClCompile Include="Source.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="buddy.h" />
     <ClInclude Include="slab.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

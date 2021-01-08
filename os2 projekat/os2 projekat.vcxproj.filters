@@ -24,9 +24,15 @@
     <ClCompile Include="slab.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="budyy.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="slab.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="buddy.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
