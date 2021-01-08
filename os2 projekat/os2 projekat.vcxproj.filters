@@ -27,12 +27,18 @@
     <ClCompile Include="budyy.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="buddy_list.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="slab.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="buddy.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="buddy_list.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

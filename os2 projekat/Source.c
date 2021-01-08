@@ -44,13 +44,13 @@ int main() {
 	buddy_init(metaspace, 4,10,space);
 	void* f = buddy_malloc(32);
 	printf("%d\n", (char*)f - space);
-	void* f1 = buddy_malloc(10);
-	void* f2 = buddy_malloc(10);
+	void* f1 = buddy_malloc(6);
+	void* f2 = buddy_malloc(6);
 	printf("%d\n", (char*)f1 - space);
 	//printf("%d\n", (char*)f2 - space);
-	printf("%d\n", (char*)buddy_malloc(110) - space);
-	printf("%d\n", (char*)buddy_malloc(240) - space);
-	printf("%d\n", (char*)buddy_malloc(490) - space);
+	printf("%d\n", (char*)buddy_malloc(100) - space);
+	printf("%d\n", (char*)buddy_malloc(230) - space);
+	printf("%d\n", (char*)buddy_malloc(470) - space);
 	buddy_free(f1);
 	buddy_free(f2);
 	buddy_free(f);

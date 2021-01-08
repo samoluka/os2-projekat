@@ -1,16 +1,12 @@
 #pragma once
 #include "buddy.h"
+#include "buddy_list.h"
 
-typedef struct List_Node {
-	struct List_Node* prev, * next;
-}List_Node;
-void add(List_Node* List, List_Node* elem);
-void remove(List_Node* elem);
 
 typedef unsigned int uint;
 typedef unsigned char uint8;
 
-#define header_size (sizeof(List_Node)+sizeof(size_t));
+#define header_size (sizeof(List_Node));
 
 List_Node* remove_last(List_Node* elem);
 List_Node* all_Lists;
@@ -24,38 +20,6 @@ uint8* splits;
 void* start_Adr, * max;
 
 
-List_Node* initNode(List_Node* elem) {
-	elem->prev = elem;
-	elem->next = elem;
-	return elem;
-}
-
-void add(List_Node* List, List_Node* elem) {
-	if (!elem)
-		return;
-	if (!List) {
-		return NULL;
-	}
-	List_Node* tail = List->prev;
-	List->prev = elem;
-	tail->next = elem;
-	elem->next = List;
-	elem->prev = tail;
-}
-
-void remove(List_Node* elem) {
-	elem->prev->next = elem->next;
-	elem->next->prev = elem->prev;
-}
-List_Node* remove_last(List_Node* elem) {
-	if (!elem)
-		return NULL;
-	if (elem->prev == elem)
-		return NULL;
-	List_Node* ret = elem->prev;
-	remove(ret);
-	return ret;
-}
 
 int find(size_t request) {
 	uint curr = min_Alloc;
@@ -139,7 +103,7 @@ void* buddy_malloc(size_t request) {
 			invers_split((ret_index - 1) / 2);
 			add(&all_Lists[entry], (List_Node*)index_to_ptr(ret_index + 1, entry));
 		}
-		*(size_t*)((char*)ret + sizeof(List_Node)) = real_request;
+		((List_Node*)ret)->size = real_request;
 		return (char*)ret + header_size;
 	}
 	return NULL;
@@ -148,7 +112,7 @@ void buddy_free(void* ptr) {
 	if (!ptr)
 		return;
 	ptr = (char*)ptr - header_size;
-	uint real_request = *(size_t*)((char*)ptr + sizeof(List_Node));
+	uint real_request = ((List_Node*)ptr)->size;
 	uint entry = find(real_request);
 	uint index = ptr_to_index(ptr, entry);
 	uint parent = (index - 1) / 2;
@@ -162,8 +126,6 @@ void buddy_free(void* ptr) {
 		entry--;
 	}
 	add(&all_Lists[entry], index_to_ptr(index, entry));
-
-	//printf("dodajem u: %d\n", entry);
 };
 void buddy_init(void* metaSpace, uint minP, uint maxP, void* start) {
 	all_Lists = (List_Node*)metaSpace;
