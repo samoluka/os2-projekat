@@ -42,15 +42,18 @@ int main() {
 //	}
 //	printf("\n");
 	buddy_init(metaspace, 4,10,space);
-	printf("%d\n", (char*)buddy_malloc(32) - space);
-	printf("%d\n", (char*)buddy_malloc(64) - space);
-	printf("%d\n", (char*)buddy_malloc(64) - space);
-	printf("%d\n", (char*)buddy_malloc(32) - space);
-	printf("%d\n", (char*)buddy_malloc(128) - space);
-	buddy_free((char*)space+12);
-	buddy_free((char*)space + 76);
-	printf("%d\n", (char*)buddy_malloc(89) - space);
-	printf("%d\n", (char*)buddy_malloc(89) - space);
-	printf("%d\n", (char*)buddy_malloc(89) - space);
-	printf("%d\n", (char*)buddy_malloc(89) - space);
+	void* f = buddy_malloc(32);
+	printf("%d\n", (char*)f - space);
+	void* f1 = buddy_malloc(10);
+	void* f2 = buddy_malloc(10);
+	printf("%d\n", (char*)f1 - space);
+	//printf("%d\n", (char*)f2 - space);
+	printf("%d\n", (char*)buddy_malloc(110) - space);
+	printf("%d\n", (char*)buddy_malloc(240) - space);
+	printf("%d\n", (char*)buddy_malloc(490) - space);
+	buddy_free(f1);
+	buddy_free(f2);
+	buddy_free(f);
+	printf("%d\n", (char*)buddy_malloc(62) - space);
+	//printf("%d\n", (char*)buddy_malloc(32) - space);
 }

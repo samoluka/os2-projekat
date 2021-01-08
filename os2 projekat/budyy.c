@@ -139,7 +139,7 @@ void* buddy_malloc(size_t request) {
 			invers_split((ret_index - 1) / 2);
 			add(&all_Lists[entry], (List_Node*)index_to_ptr(ret_index + 1, entry));
 		}
-		*(size_t*)((char*)ret+sizeof(List_Node)) = real_request;
+		*(size_t*)((char*)ret + sizeof(List_Node)) = real_request;
 		return (char*)ret + header_size;
 	}
 	return NULL;
@@ -148,7 +148,7 @@ void buddy_free(void* ptr) {
 	if (!ptr)
 		return;
 	ptr = (char*)ptr - header_size;
-	uint real_request = *(size_t*)((char*)ptr+sizeof(List_Node));
+	uint real_request = *(size_t*)((char*)ptr + sizeof(List_Node));
 	uint entry = find(real_request);
 	uint index = ptr_to_index(ptr, entry);
 	uint parent = (index - 1) / 2;
@@ -158,9 +158,12 @@ void buddy_free(void* ptr) {
 			break;
 		remove(index_to_ptr(((index - 1) ^ 1) + 1, entry));
 		index = parent;
+		parent = (index - 1) / 2;
 		entry--;
 	}
 	add(&all_Lists[entry], index_to_ptr(index, entry));
+
+	//printf("dodajem u: %d\n", entry);
 };
 void buddy_init(void* metaSpace, uint minP, uint maxP, void* start) {
 	all_Lists = (List_Node*)metaSpace;
