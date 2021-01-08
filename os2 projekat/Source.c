@@ -26,7 +26,7 @@ void constructor2(void* data) {
 }
 
 int main() {
-	void* metaspace = malloc(BLOCK_SIZE*1024);
+	void* metaspace = malloc(7*2*sizeof(void*));
 	void* space = malloc(BLOCK_SIZE * 1024);
 	//kmem_init(space, 1024);
 //	kmem_cache_t* shared = kmem_cache_create("prvi kes", sizeof(myStruct), constructor, NULL);
@@ -42,9 +42,15 @@ int main() {
 //	}
 //	printf("\n");
 	buddy_init(metaspace, 4,10,space);
-	printf("%d\n", (char*)buddy_malloc(512) - space);
-	printf("%d\n", (char*)buddy_malloc(512) - space);
+	printf("%d\n", (char*)buddy_malloc(32) - space);
+	printf("%d\n", (char*)buddy_malloc(64) - space);
 	printf("%d\n", (char*)buddy_malloc(64) - space);
 	printf("%d\n", (char*)buddy_malloc(32) - space);
 	printf("%d\n", (char*)buddy_malloc(128) - space);
+	buddy_free((char*)space+12);
+	buddy_free((char*)space + 76);
+	printf("%d\n", (char*)buddy_malloc(89) - space);
+	printf("%d\n", (char*)buddy_malloc(89) - space);
+	printf("%d\n", (char*)buddy_malloc(89) - space);
+	printf("%d\n", (char*)buddy_malloc(89) - space);
 }

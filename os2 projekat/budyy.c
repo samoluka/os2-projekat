@@ -10,6 +10,8 @@ void remove(List_Node* elem);
 typedef unsigned int uint;
 typedef unsigned char uint8;
 
+#define header_size (sizeof(List_Node)+sizeof(size_t));
+
 List_Node* remove_last(List_Node* elem);
 List_Node* all_Lists;
 uint num_of_Lists;
@@ -97,16 +99,16 @@ void lower_bucket_limit(uint entry) {
 			continue;
 		}
 		void* right_ptr = index_to_ptr(root_index + 1, lower_limit);
-		max = (char*)right_ptr + sizeof(List_Node);
-		add(&all_Lists[lower_limit],(List_Node*)right_ptr);
+		max = (char*)right_ptr + header_size;
+		add(&all_Lists[lower_limit], (List_Node*)right_ptr);
 		initNode(&all_Lists[--lower_limit]);
 		root_index = (root_index - 1) / 2;
-		if (root_index != 0)
+		if (root_index)
 			invers_split((root_index - 1) / 2);
 	}
 }
 void* buddy_malloc(size_t request) {
-	size_t real_request = request + sizeof(List_Node);
+	size_t real_request = request + header_size;
 	void* ret = NULL;
 	if (real_request > max_Alloc) {
 		return ret;
@@ -128,7 +130,7 @@ void* buddy_malloc(size_t request) {
 		}
 		max = (char*)ret + real_request;
 		int ret_index = ptr_to_index(ret, entry);
-		if (ret_index != 0) {
+		if (ret_index) {
 			invers_split((ret_index - 1) / 2);
 		}
 		while (entry < original) {
@@ -137,13 +139,28 @@ void* buddy_malloc(size_t request) {
 			invers_split((ret_index - 1) / 2);
 			add(&all_Lists[entry], (List_Node*)index_to_ptr(ret_index + 1, entry));
 		}
-		return (char*)ret + sizeof(List_Node);
+		*(size_t*)((char*)ret+sizeof(List_Node)) = real_request;
+		return (char*)ret + header_size;
 	}
 	return NULL;
 };
-void buddy_free(void* bucket) {
-
-
+void buddy_free(void* ptr) {
+	if (!ptr)
+		return;
+	ptr = (char*)ptr - header_size;
+	uint real_request = *(size_t*)((char*)ptr+sizeof(List_Node));
+	uint entry = find(real_request);
+	uint index = ptr_to_index(ptr, entry);
+	uint parent = (index - 1) / 2;
+	while (index) {
+		invers_split(parent);
+		if (is_split(parent) || entry == lower_limit)
+			break;
+		remove(index_to_ptr(((index - 1) ^ 1) + 1, entry));
+		index = parent;
+		entry--;
+	}
+	add(&all_Lists[entry], index_to_ptr(index, entry));
 };
 void buddy_init(void* metaSpace, uint minP, uint maxP, void* start) {
 	all_Lists = (List_Node*)metaSpace;
