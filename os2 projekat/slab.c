@@ -2,12 +2,16 @@
 #include "slab.h"
 #include <stdio.h>
 #include <string.h>
+#include "buddy.h"
+#include <math.h>
 #define CRT_SECURE_NO_WARNINGS
 void kmem_init(void* space, int block_num) {
 	num_of_blocks = block_num;
 	startAdr = space;
 	head = 0;
 	tail = 0;
+	int log_num_of_blocks = log2(num_of_blocks);
+	buddy_init(space, 12, 12 + log_num_of_blocks, (char*)space + 2 * BLOCK_SIZE,(char*)space+block_num*BLOCK_SIZE);
 }
 
 kmem_cache_t* kmem_cache_create(const char* name, size_t size,
