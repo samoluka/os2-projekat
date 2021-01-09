@@ -21,6 +21,19 @@ void add(List_Node* List, List_Node* elem) {
 	elem->prev = tail;
 }
 
+void add_first(List_Node* List, List_Node* elem) {
+	if (!elem)
+		return;
+	if (!List) {
+		return NULL;
+	}
+	List_Node* head = List->next;
+	List->prev = elem;
+	head->next = elem;
+	elem->next = List;
+	elem->prev = head;
+}
+
 void remove(List_Node* elem) {
 	elem->prev->next = elem->next;
 	elem->next->prev = elem->prev;

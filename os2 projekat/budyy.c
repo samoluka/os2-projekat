@@ -16,7 +16,7 @@ static uint min_power;
 static uint max_power;
 static uint lower_limit;
 static void* last_Adr;
-static void* fake = NULL;
+static void* max = NULL;
 
 #define header_size (sizeof(List_Node))
 #define parent(x) ((x-1)/2)
@@ -24,6 +24,13 @@ static void* fake = NULL;
 #define right_child(x) ((x*2)+2)
 #define buddy(x) (((x-1)^1)+1)
 
+int update_max(size_t new_max) {
+	if (new_max > last_Adr) {
+		return 0;
+	}
+	max = new_max;
+	return 1;
+}
 inline void* index_to_ptr(uint index_of_Tree, uint index_of_List) {
 	return (char*)start_Adr +
 		((index_of_Tree - (1 << index_of_List) + 1) <<
@@ -33,7 +40,7 @@ inline uint ptr_to_index(void* ptr, uint index_of_List) {
 	return (((char*)ptr - start_Adr) >> (max_power - index_of_List)) +
 		(1 << index_of_List) - 1;
 }
-inline int is_split(uint index) {
+inline uint is_split(uint index) {
 	return (splits[index / 8] >> (index % 8)) & 1;
 }
 inline void invers_split(uint index) {
@@ -54,10 +61,9 @@ int find(size_t request) {
 	return ret;
 	//uint l = (uint)(log(request) / log(2));
 	//return  max_power - l - 1;
-
 }
 
-void build_tree(uint entry) {
+int build_tree(uint entry) {
 	while (entry < lower_limit) {
 		uint root_index = ptr_to_index(start_Adr, lower_limit);
 		uint parent = parent(root_index);
@@ -69,6 +75,8 @@ void build_tree(uint entry) {
 			invers_split(parent);
 		} else {
 			void* right_ptr = index_to_ptr(root_index + 1, lower_limit);
+			if (!update_max((char*)right_ptr + (1 << (max_power - lower_limit))))
+				return 0;
 			add(&all_Lists[lower_limit], (List_Node*)right_ptr);
 			initNode(&all_Lists[--lower_limit]);
 			root_index = parent(root_index);
@@ -76,29 +84,43 @@ void build_tree(uint entry) {
 				invers_split(parent(root_index));
 		}
 	}
+	return 1;
 }
 void* buddy_malloc(size_t request) {
 	size_t real_request = request + header_size;
 	void* ret = NULL;
-	if (real_request > max_Alloc) {
-		return ret;
-	}
+	//if (real_request > max_Alloc) {
+	//	return ret;
+	//}
 	int entry = find(real_request);
 	int original = entry;
+	int original_lower = lower_limit;
 	if (entry < 0)
 		return ret;
 	while (entry >= 0) {
-		build_tree(entry);
+		if (!build_tree(entry)) {
+			return NULL;
+		}
 		ret = remove_last(&all_Lists[entry]);
-		if (fake && ret == fake)
-			continue;
+		//if (ret != NULL && (char*)ret + ((size_t)1 << (max_power - original)) > last_Adr) {
+		//	add_first(&all_Lists[entry], ret);
+		//	ret = NULL;
+		//}
 		if (!ret) {
 			if (entry != lower_limit || !entry) {
 				entry--;
 				continue;
 			}
-			build_tree(entry - 1);
+			if (!build_tree(entry - 1)) {
+				return NULL;
+			}
 			ret = remove_last(&all_Lists[entry]);
+		}
+		size_t size = (size_t)1 << (max_power - original);
+		size_t bytes_needed = entry < original ? size / 2 + header_size : size;
+		if (!update_max((char*)ret + bytes_needed)) {
+			add(&all_Lists[original], ret);
+			return NULL;
 		}
 		int ret_index = ptr_to_index(ret, entry);
 		if (ret_index) {
@@ -111,10 +133,8 @@ void* buddy_malloc(size_t request) {
 			add(&all_Lists[entry], (List_Node*)index_to_ptr(ret_index + 1, entry));
 		}
 		((List_Node*)ret)->size = real_request;
-		//if ((char*)ret + (1 << (num_of_Lists - original)) > last_Adr) {
+		//if ((char*)ret + (1 << (max_power - original)) > last_Adr) {
 		//	buddy_free((char*)ret + header_size, 1);
-		//	fake = ret;
-		//	//remove(ret);
 		//	return NULL;
 		//}
 		return (char*)ret + header_size;
@@ -148,6 +168,7 @@ void buddy_init(void* metaSpace, uint minP, uint maxP, void* start, void* end) {
 	max_Alloc = 1 << max_power;
 	start_Adr = start;
 	last_Adr = end;
+	max = start_Adr;
 	num_of_Lists = max_power - min_power + 1;
 	initNode(&all_Lists[num_of_Lists - 1]);
 	add(&all_Lists[num_of_Lists - 1], (List_Node*)start_Adr);
