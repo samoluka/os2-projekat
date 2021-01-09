@@ -26,19 +26,21 @@ void constructor2(void* data) {
 }
 
 int main() {
-	void* metaspace = malloc(1005 * sizeof(List_Node));
-	void* space = malloc(1005);
-	buddy_init(metaspace, 1, 10, space,(char*)space+1005);
+	void* metaspace = malloc(1024 * sizeof(List_Node));
+	void* space = malloc(1024);
+	buddy_init(metaspace, 1, 10, space,(char*)space+1024);
 	printf("11 %d\n", (char*)buddy_malloc(480) - space);
 	printf("12 %d\n", (char*)buddy_malloc(480) - space);
-	printf("21 %d\n", (char*)buddy_malloc(200) - space);
-	printf("22 %d\n", (char*)buddy_malloc(200) - space);
-	printf("31 %d\n", (char*)buddy_malloc(100) - space);
-	printf("32 %d\n", (char*)buddy_malloc(100) - space);
-	printf("41 %d\n", (char*)buddy_malloc(40) - space);
-	printf("42 %d\n", (char*)buddy_malloc(40) - space);
-	printf("51 %d\n", (char*)buddy_malloc(10) - space);
-	printf("52 %d\n", (char*)buddy_malloc(10) - space);
+	//printf("21 %d\n", (char*)buddy_malloc(200) - space);
+	//printf("22 %d\n", (char*)buddy_malloc(200) - space);
+	//printf("31 %d\n", (char*)buddy_malloc(100) - space);
+	//printf("32 %d\n", (char*)buddy_malloc(100) - space);
+	//printf("41 %d\n", (char*)buddy_malloc(40) - space);
+	//printf("42 %d\n", (char*)buddy_malloc(40) - space);
+	//printf("41 %d\n", (char*)buddy_malloc(10) - space);
+	//printf("41 %d\n", (char*)buddy_malloc(10) - space);
+	buddy_free((char*)space - 12, 0);
+	printf("43 %d\n", (char*)buddy_malloc(250) - space);
 	free(metaspace);
 	free(space);
 	//	kmem_init(space, 1000);

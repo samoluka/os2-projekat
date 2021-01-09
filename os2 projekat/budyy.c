@@ -16,6 +16,7 @@ static uint min_power;
 static uint max_power;
 static uint lower_limit;
 static void* last_Adr;
+static void* fake = NULL;
 
 #define header_size (sizeof(List_Node))
 #define parent(x) ((x-1)/2)
@@ -89,6 +90,8 @@ void* buddy_malloc(size_t request) {
 	while (entry >= 0) {
 		build_tree(entry);
 		ret = remove_last(&all_Lists[entry]);
+		if (fake && ret == fake)
+			continue;
 		if (!ret) {
 			if (entry != lower_limit || !entry) {
 				entry--;
@@ -108,15 +111,17 @@ void* buddy_malloc(size_t request) {
 			add(&all_Lists[entry], (List_Node*)index_to_ptr(ret_index + 1, entry));
 		}
 		((List_Node*)ret)->size = real_request;
-		if ((char*)ret + (1 << (num_of_Lists-original)) > last_Adr) {
-			buddy_free((char*)ret+header_size);
-			return NULL;
-		}
+		//if ((char*)ret + (1 << (num_of_Lists - original)) > last_Adr) {
+		//	buddy_free((char*)ret + header_size, 1);
+		//	fake = ret;
+		//	//remove(ret);
+		//	return NULL;
+		//}
 		return (char*)ret + header_size;
 	}
 	return NULL;
 };
-void buddy_free(void* ptr) {
+void buddy_free(void* ptr, int a) {
 	if (!ptr)
 		return;
 	ptr = (char*)ptr - header_size;
