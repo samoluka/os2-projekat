@@ -34,7 +34,7 @@ void add_first(List_Node* List, List_Node* elem) {
 	elem->prev = head;
 }
 
-void remove(List_Node* elem) {
+void removeMy(List_Node* elem) {
 	elem->prev->next = elem->next;
 	elem->next->prev = elem->prev;
 }
@@ -44,6 +44,6 @@ List_Node* remove_last(List_Node* elem) {
 	if (elem->prev == elem)
 		return NULL;
 	List_Node* ret = elem->prev;
-	remove(ret);
+	removeMy(ret);
 	return ret;
 }

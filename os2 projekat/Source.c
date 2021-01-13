@@ -5,6 +5,7 @@ typedef struct myStruct {
 	int a;
 	int b;
 	int c;
+	int d;
 }myStruct;
 
 
@@ -17,6 +18,7 @@ void constructor(void* data) {
 	c->a = x++;
 	c->b = x++;
 	c->c = x++;
+	c->d = x++;
 }
 void constructor2(void* data) {
 	myStruct2* c = (myStruct2*)data;
@@ -26,18 +28,24 @@ void constructor2(void* data) {
 }
 
 int main() {
-	void* space = malloc(1000 * BLOCK_SIZE);
-	kmem_init(space, 1000);
+	void* space = malloc(1040 * BLOCK_SIZE);
+	kmem_init(space, 1040);
 	kmem_cache_t* shared = kmem_cache_create("prvi kes", sizeof(myStruct), constructor, NULL);
-	kmem_cache_t* shared2 = kmem_cache_create("prvi kes", sizeof(myStruct2), constructor2, NULL);
+	kmem_cache_t* shared2 = kmem_cache_create("prvi kes", sizeof(myStruct), constructor, NULL);
+	//kmem_cache_t* shared2 = kmem_cache_create("prvi kes", sizeof(myStruct2), constructor2, NULL);
 	//kmem_cache_info(shared);
 	//kmem_cache_info(shared2);
 	myStruct* obj1 = kmem_cache_alloc(shared);
 	myStruct* obj2 = kmem_cache_alloc(shared);
-	myStruct2* obj3 = kmem_cache_alloc(shared2);
-	printf("objekat 1: %d %d %d\nobjekat 2: %d %d %d\nobjekat 3:", obj1->a, obj1->b, obj1->c, obj2->a, obj2->b, obj2->c);
+	myStruct* obj3 = kmem_cache_alloc(shared);
+	myStruct* obj4 = kmem_cache_alloc(shared);
+	kmem_cache_destroy(shared);
+	shared2 = kmem_cache_create("prvi kes", sizeof(myStruct), constructor, NULL);
+
+	free(space);
+	/*printf("objekat 1: %d %d %d\nobjekat 2: %d %d %d\nobjekat 3:", obj1->a, obj1->b, obj1->c, obj2->a, obj2->b, obj2->c);
 	for (int i = 0; i < 10; i++) {
 		printf("%d ", obj3->a[i]);
 	}
-	printf("\n");
+	printf("\n");*/
 }

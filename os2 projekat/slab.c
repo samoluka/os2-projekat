@@ -1,30 +1,45 @@
 #pragma once
 #include "slab.h"
-#include <stdio.h>
-#include <string.h>
 #include "buddy.h"
 #include <math.h>
-#define CRT_SECURE_NO_WARNINGS
+#include <string.h>
 
 typedef unsigned int uint;
 typedef unsigned char uint8;
-
+typedef struct kmem_cache_t_slab kmem_cache_t_slab;
+typedef struct kmem_cache_t_lists kmem_cache_t_lists;
+typedef struct kmem_cache_t_object_info kmem_cache_t_object_info;
+typedef struct kmem_cache_t_header kmem_cache_t_header;
+typedef struct kmem_cache_t_list_elem kmem_cache_t_list_elem;
+typedef struct kmem_cache_t_obj_header kmem_cache_t_obj_header;
 #define log2_block_size (12)
+#define max_small_buff_pow (17)
+#define min_small_buff_pow (5)
+#define max_small_buff_size (max_small_buff_pow - min_small_buff_pow)
+
+void* kmem_cache_alloc(kmem_cache_t* cachep);
 
 int num_of_blocks;
 void* startAdr;
-//void* head;
-//void* tail;
+kmem_cache_t** smallBuff;
 kmem_cache_t* caches;
 
+typedef struct kmem_cache_t_obj_header {
+	kmem_cache_t_obj_header* next;
+	kmem_cache_t_slab* mySlab;
+} kmem_cache_t_obj_header;
+typedef struct kmem_cache_t_list_elem {
+	kmem_cache_t_slab* head;
+	kmem_cache_t_slab* tail;
+} kmem_cache_t_list_elem;
 typedef struct kmem_cache_t_slab {
-	kmem_cache_t_slab* next;
-	kmem_cache_t_slab* prev;
+	void* next;
+	void* prev;
+	kmem_cache_t_obj_header* free;
 	uint curr_objects;
 } kmem_cache_t_slab;
-
 typedef struct kmem_cache_t_lists {
-	kmem_cache_t_slab* free, * half, * full;
+	kmem_cache_t_list_elem free, half, full;
 }kmem_cache_t_lists;
 
 typedef struct kmem_cache_t_object_info {
@@ -34,7 +49,7 @@ typedef struct kmem_cache_t_object_info {
 }kmem_cache_t_object_info;
 
 typedef struct kmem_cache_t_header {
-	const char* cache_name;
+	char cache_name[MAX_NAME_SIZE];
 	kmem_cache_t_object_info obj_info;
 	uint slab_block_size;
 	uint num_of_slabs;
@@ -42,122 +57,181 @@ typedef struct kmem_cache_t_header {
 }kmem_cache_t_header;
 typedef struct kmem_cache_s {
 	kmem_cache_t_header header;
-	kmem_cache_t_lists heads, tails;
+	kmem_cache_t_lists lists;
 	uint num_of_obj;
 } kmem_cache_t;
 
 uint calculate_blocks_need(size_t space_needed) {
-	return 1;
+	return 500;
 }
-void add(kmem_cache_t_slab* head, kmem_cache_t_slab* tail, kmem_cache_t_slab* elem) {
-	if (tail) {
-		elem->prev = tail;
-		tail = tail->next = elem;
+void addFromList(kmem_cache_t_list_elem* list, kmem_cache_t_slab* elem) {
+	if (list->tail) {
+		elem->prev = list->tail;
+		list->tail = list->tail->next = elem;
 	} else {
 		elem->prev = elem->next = elem;
-		head = tail = elem;
+		list->head = list->tail = elem;
 	}
 }
-kmem_cache_t_slab* remove(kmem_cache_t_slab* head, kmem_cache_t_slab* tail) {
-	if (!head || !tail)
+kmem_cache_t_slab* removeFromList(kmem_cache_t_list_elem* list) {
+	if (!list->head || !list->tail)
 		return NULL;
 	kmem_cache_t_slab* ret;
-	if (head->prev == head) {
-		ret = head;
-		head = tail = NULL;
+	if (list->head->prev == list->head) {
+		ret = list->head;
+		list->head = list->tail = NULL;
 	} else {
-		ret = tail;
-		tail = head->prev = tail->prev;
-		tail->next = head;
+		ret = list->tail;
+		list->tail = list->head->prev = list->tail->prev;
+		list->tail->next = list->head;
 	}
 	ret->next = NULL;
 	ret->prev = NULL;
 	return ret;
 }
+void addObjList(kmem_cache_t_obj_header** l, kmem_cache_t_obj_header* elem) {
+	elem->next = *l;
+	*l = elem;
+}
+void* removeObjList(kmem_cache_t_obj_header* l) {
+	void* ret = l;
+	l = l->next;
+	return ret;
+}
 void init_start_cache(kmem_cache_t* cache) {
 	cache->header.obj_info.cache_ctor = NULL;
 	cache->header.obj_info.cache_dtor = NULL;
-	cache->header.obj_info.cache_size = sizeof(kmem_cache_t);
+	cache->header.obj_info.cache_size = sizeof(kmem_cache_t) + sizeof(kmem_cache_t_obj_header);
 	cache->header.num_of_slabs = 0;
-	cache->header.slab_block_size = calculate_blocks_need(cache->header.obj_info.cache_size);
+	cache->header.slab_block_size = 1;
 	cache->num_of_obj = 0;
-	cache->heads.free = cache->heads.full = cache->heads.half = NULL;
-	cache->tails.free = cache->tails.full = cache->tails.half = NULL;
+	cache->header.obj_per_slab = 5;
+	cache->lists.free.head = 0;
+	cache->lists.half.head = 0;
+	cache->lists.full.head = 0;
+	cache->lists.free.tail = 0;
+	cache->lists.half.tail = 0;
+	cache->lists.full.tail = 0;
 	kmem_cache_shrink(cache);
 }
 void kmem_init(void* space, int block_num) {
 	num_of_blocks = block_num;
 	startAdr = space;
 	int log_num_of_blocks = log2(num_of_blocks);
-	buddy_init(space, log2_block_size, log2_block_size + log_num_of_blocks,
+	buddy_init(space, log2_block_size, log2_block_size + log_num_of_blocks + 1,
 		(char*)space + 3 * BLOCK_SIZE, (char*)space + block_num * BLOCK_SIZE);
 	caches = (char*)space + 2 * BLOCK_SIZE;
 	init_start_cache(caches);
+	smallBuff = (char*)space + 2 * BLOCK_SIZE + sizeof(kmem_cache_t);
+	for (int i = 0; i < max_small_buff_size; i++) {
+		smallBuff[i] = NULL;
+	}
 }
 
 kmem_cache_t* kmem_cache_create(const char* name, size_t size,
 	void (*ctor)(void*), void (*dtor)(void*)) {
 	kmem_cache_t* ret = kmem_cache_alloc(caches);
-	ret->header.cache_name = name;
+	strcpy(ret->header.cache_name, name);
 	ret->header.obj_info.cache_ctor = ctor;
 	ret->header.obj_info.cache_dtor = dtor;
-	ret->header.obj_info.cache_size = size;
+	ret->header.obj_info.cache_size = size + sizeof(kmem_cache_t_obj_header);
 	ret->header.num_of_slabs = 0;
 	ret->header.slab_block_size = calculate_blocks_need(size);
 	ret->num_of_obj = 0;
-	ret->heads.free = ret->heads.full = ret->heads.half = NULL;
-	ret->tails.free = ret->tails.full = ret->tails.half = NULL;
-	kmem_cache_shrink(ret);
+	ret->header.obj_per_slab = 5;
+	ret->lists.free.head = 0;
+	ret->lists.half.head = 0;
+	ret->lists.full.head = 0;
+	ret->lists.free.tail = 0;
+	ret->lists.half.tail = 0;
+	ret->lists.full.tail = 0;
+	if (kmem_cache_shrink(ret) == -1)
+		return NULL;
 	return ret;
 }
 
 int kmem_cache_shrink(kmem_cache_t* cachep) {
-	kmem_cache_t_slab* curr = buddy_malloc(cachep->header.slab_block_size * BLOCK_SIZE);
-	kmem_cache_t_slab* head = cachep->heads.free;
-	kmem_cache_t_slab* tail = cachep->tails.free;
-	add(head, tail, curr);
+	kmem_cache_t_slab* curr = buddy_malloc(cachep->header.slab_block_size * BLOCK_SIZE + sizeof(kmem_cache_t_obj_header));
+	if (curr == NULL)
+		return -1;
+	kmem_cache_t_list_elem* l = &cachep->lists.free;
+	addFromList(l, curr);
 	cachep->header.num_of_slabs++;
+	curr->curr_objects = 0;
+	curr->free = 0;
+	return 1;
 }
 
 void* kmem_cache_alloc(kmem_cache_t* cachep) {
 	if (!cachep)
 		return NULL;
-	kmem_cache_t_slab* head = NULL;
-	kmem_cache_t_slab* tail = NULL;
-	if (cachep->tails.half) {
-		head = cachep->heads.half;
-		tail = cachep->tails.half;
-	} else if (cachep->tails.free) {
-		head = cachep->heads.free;
-		tail = cachep->tails.free;
+	kmem_cache_t_list_elem* l = 0;
+	if (cachep->lists.half.head) {
+		l = &cachep->lists.half;
+	} else if (cachep->lists.free.head) {
+		l = &cachep->lists.free;
 	}
-	if (!head || !tail) {
+	if (!l) {
 		kmem_cache_shrink(cachep);
-		head = cachep->heads.free;
-		tail = cachep->tails.free;
+		l = &cachep->lists.free;
 	}
-	kmem_cache_t_slab* slab_for_obj = remove(head, tail);
-	void* ret = (char*)slab_for_obj + sizeof(kmem_cache_t_slab) + slab_for_obj->curr_objects * cachep->header.obj_info.cache_size;
+	kmem_cache_t_slab* slab_for_obj = removeFromList(l);
+	void* ret;
+	if (!slab_for_obj->free)
+		ret = (char*)slab_for_obj + sizeof(kmem_cache_t_slab) + slab_for_obj->curr_objects * cachep->header.obj_info.cache_size;
+	else
+		ret = removeObjList(slab_for_obj->free);
+	((kmem_cache_t_obj_header*)ret)->mySlab = slab_for_obj;
+	ret = (char*)ret + sizeof(kmem_cache_t_obj_header);
 	void (*ctor)(void*) = cachep->header.obj_info.cache_ctor;
-	ctor(ret);
+	if (ctor)
+		ctor(ret);
 	slab_for_obj->curr_objects++;
 	if (slab_for_obj->curr_objects == cachep->header.obj_per_slab) {
-		add(cachep->heads.full, cachep->tails.full, slab_for_obj);
+		addFromList(&cachep->lists.full, slab_for_obj);
 	} else {
-		add(cachep->heads.half, cachep->tails.half, slab_for_obj);
+		addFromList(&cachep->lists.half, slab_for_obj);
 	}
 	return ret;
 }
 
-void kmem_cache_free(kmem_cache_t* cachep, void* objp) {}
-
-void* kmalloc(size_t size) {
-
+void kmem_cache_free(kmem_cache_t* cachep, void* objp) {
+	cachep->num_of_obj--;
+	kmem_cache_t_obj_header* h = (char*)objp - sizeof(kmem_cache_t_obj_header);
+	kmem_cache_t_slab* cur = h->mySlab;
+	if (cur->curr_objects == 1) {
+		addFromList(&cachep->lists.free, cur);
+	} else {
+		addFromList(&cachep->lists.half, cur);
+	}
+	cur->curr_objects--;
+	addObjList(&cur->free, h);
 }
 
-void kfree(const void* objp) {}
+void* kmalloc(size_t size) {
+	uint ind = log2(size) - min_small_buff_pow;
+	if (!smallBuff[ind]) {
+		smallBuff[ind] = kmem_cache_create("mali bafer", size + sizeof(uint), NULL, NULL);
+	}
+	void* ret = kmem_cache_alloc(smallBuff[ind]);
+	*(uint*)ret = ind;
+	return (char*)ret + sizeof(uint);
+}
 
-void kmem_cache_destroy(kmem_cache_t* cachep) {}
+void kfree(const void* objp) {
+	uint ind = (*(uint*)objp);
+	kmem_cache_free(smallBuff[ind], objp);
+}
+
+void kmem_cache_destroy(kmem_cache_t* cachep) {
+	kmem_cache_free(caches, cachep);
+	while (cachep->lists.free.head)
+		buddy_free(removeFromList(&cachep->lists.free));
+	while (cachep->lists.full.head)
+		buddy_free(removeFromList(&cachep->lists.full));
+	while (cachep->lists.half.head)
+		buddy_free(removeFromList(&cachep->lists.half));
+}
 
 void kmem_cache_info(kmem_cache_t* cachep) {
 	//kmem_cache_t_header* h = &cachep->header;

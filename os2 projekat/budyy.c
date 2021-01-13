@@ -56,7 +56,7 @@ int build_tree(uint entry) {
 	while (entry < lower_limit) {
 		size_t root_index = ptr_to_index(start_Adr, lower_limit);
 		if (!is_split(parent(root_index))) {
-			remove((List_Node*)start_Adr);
+			removeMy((List_Node*)start_Adr);
 			initNode(&all_Lists[--lower_limit]);
 			add(&all_Lists[lower_limit], (List_Node*)start_Adr);
 			continue;
@@ -129,7 +129,7 @@ void buddy_free(void* ptr) {
 		invers_split(parent(index));
 		if (is_split(parent(index)) || entry == lower_limit)
 			break;
-		remove(index_to_ptr(buddy(index), entry));
+		removeMy(index_to_ptr(buddy(index), entry));
 		index = parent(index);
 		entry--;
 	}
