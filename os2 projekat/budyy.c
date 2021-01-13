@@ -134,8 +134,8 @@ void buddy_free(void* ptr) {
 		entry--;
 	}
 	add(&all_Lists[entry], index_to_ptr(index, entry));
-};
-void buddy_init(void* metaSpace, uint minP, uint maxP, void* start, void* end) {
+}
+void buddy_init(void* metaSpace, unsigned int minP, unsigned int maxP, void* start, void* end) {
 	all_Lists = (List_Node*)metaSpace;
 	min_power = minP;
 	min_Alloc = 1 << min_power;
