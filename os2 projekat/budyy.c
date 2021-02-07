@@ -2,7 +2,7 @@
 #include "buddy.h"
 #include "buddy_list.h"
 #include <math.h>
-
+#include <Windows.h>
 typedef unsigned int uint;
 typedef unsigned char uint8;
 
@@ -17,6 +17,7 @@ static uint max_power;
 static uint lower_limit;
 static void* last_Adr;
 static void* max = NULL;
+HANDLE mutex;
 
 #define header_size (sizeof(List_Node))
 #define parent(x) ((x-1)/2)
@@ -53,6 +54,7 @@ int find(size_t request) {
 }
 
 int build_tree(uint entry) {
+	
 	while (entry < lower_limit) {
 		size_t root_index = ptr_to_index(start_Adr, lower_limit);
 		if (!is_split(parent(root_index))) {
@@ -78,6 +80,7 @@ void* buddy_malloc(size_t request) {
 	if (real_request > max_Alloc || !check_max((char*)start_Adr + real_request)) {
 		return NULL;
 	}
+	WaitForSingleObject(mutex, INFINITE);
 	uint entry = find(real_request), original = entry;
 	while (entry + 1 != 0) {
 		char* ret;
@@ -91,8 +94,10 @@ void* buddy_malloc(size_t request) {
 				entry--;
 				continue;
 			}
-			if (!build_tree(entry - 1))
+			if (!build_tree(entry - 1)) {
+				ReleaseMutex(mutex);
 				return NULL;
+			}
 			ret = remove_last(&all_Lists[entry]);
 		}
 		size_t size = (size_t)1 << (max_power - original);
@@ -114,13 +119,17 @@ void* buddy_malloc(size_t request) {
 			add(&all_Lists[entry], (List_Node*)index_to_ptr(index + 1, entry));
 		}
 		((List_Node*)ret)->size = real_request;
+		ReleaseMutex(mutex);
 		return ret + header_size;
 	}
+	ReleaseMutex(mutex);
 	return NULL;
 };
 void buddy_free(void* ptr) {
-	if (!ptr)
+	if (!ptr) {
 		return;
+	}
+	WaitForSingleObject(mutex, INFINITE);
 	ptr = (char*)ptr - header_size;
 	uint real_request = ((List_Node*)ptr)->size;
 	uint entry = find(real_request);
@@ -134,6 +143,7 @@ void buddy_free(void* ptr) {
 		entry--;
 	}
 	add(&all_Lists[entry], index_to_ptr(index, entry));
+	ReleaseMutex(mutex);
 }
 void buddy_init(void* metaSpace, unsigned int minP, unsigned int maxP, void* start, void* end) {
 	all_Lists = (List_Node*)metaSpace;
@@ -151,4 +161,5 @@ void buddy_init(void* metaSpace, unsigned int minP, unsigned int maxP, void* sta
 	splits = &all_Lists[num_of_Lists];
 	for (int i = 0; i < ((1 << num_of_Lists - 1) / 8);i++)
 		splits[i] = 0;
+	mutex = CreateMutex(0, 0, 0);
 };

@@ -9,5 +9,5 @@ typedef struct List_Node {
 List_Node* initNode(List_Node* elem);
 void add(List_Node* List, List_Node* elem);
 void add_first(List_Node* List, List_Node* elem);
-void remove(List_Node* elem);
+void removeMy(List_Node* elem);
 List_Node* remove_last(List_Node* elem);

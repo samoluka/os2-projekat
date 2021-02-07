@@ -3,6 +3,8 @@
 #include "buddy.h"
 #include <math.h>
 #include <string.h>
+#include <Windows.h>
+#include <stdio.h>
 
 typedef unsigned int uint;
 typedef unsigned char uint8;
@@ -23,6 +25,7 @@ int num_of_blocks;
 void* startAdr;
 kmem_cache_t** smallBuff;
 kmem_cache_t* caches;
+HANDLE mutex;
 
 typedef struct kmem_cache_t_obj_header {
 	kmem_cache_t_obj_header* next;
@@ -62,9 +65,16 @@ typedef struct kmem_cache_s {
 } kmem_cache_t;
 
 uint calculate_blocks_need(size_t space_needed) {
-	return 500;
+	WaitForSingleObject(mutex, INFINITE);
+	int ret = 1;
+	while (!(ret * BLOCK_SIZE > space_needed)) {
+		ret *= 2;
+	}
+	ReleaseMutex(mutex);
+	return ret;
 }
 void addFromList(kmem_cache_t_list_elem* list, kmem_cache_t_slab* elem) {
+	WaitForSingleObject(mutex, INFINITE);
 	if (list->tail) {
 		elem->prev = list->tail;
 		list->tail = list->tail->next = elem;
@@ -72,11 +82,20 @@ void addFromList(kmem_cache_t_list_elem* list, kmem_cache_t_slab* elem) {
 		elem->prev = elem->next = elem;
 		list->head = list->tail = elem;
 	}
+	ReleaseMutex(mutex);
 }
 kmem_cache_t_slab* removeFromList(kmem_cache_t_list_elem* list) {
 	if (!list->head || !list->tail)
 		return NULL;
+	WaitForSingleObject(mutex, INFINITE);
 	kmem_cache_t_slab* ret;
+	if (!list->head->prev) {
+		ret = list->head;
+		list->head = NULL;
+		list->tail = NULL;
+		ReleaseMutex(mutex);
+		return ret;
+	}
 	if (list->head->prev == list->head) {
 		ret = list->head;
 		list->head = list->tail = NULL;
@@ -87,32 +106,38 @@ kmem_cache_t_slab* removeFromList(kmem_cache_t_list_elem* list) {
 	}
 	ret->next = NULL;
 	ret->prev = NULL;
+	ReleaseMutex(mutex);
 	return ret;
 }
 void addObjList(kmem_cache_t_obj_header** l, kmem_cache_t_obj_header* elem) {
+	WaitForSingleObject(mutex, INFINITE);
 	elem->next = *l;
 	*l = elem;
+	ReleaseMutex(mutex);
 }
 void* removeObjList(kmem_cache_t_obj_header* l) {
+	WaitForSingleObject(mutex, INFINITE);
 	void* ret = l;
 	l = l->next;
+	ReleaseMutex(mutex);
 	return ret;
 }
 void init_start_cache(kmem_cache_t* cache) {
 	cache->header.obj_info.cache_ctor = NULL;
 	cache->header.obj_info.cache_dtor = NULL;
+	strcpy(cache->header.cache_name, "kes kesova");
 	cache->header.obj_info.cache_size = sizeof(kmem_cache_t) + sizeof(kmem_cache_t_obj_header);
 	cache->header.num_of_slabs = 0;
-	cache->header.slab_block_size = 1;
+	cache->header.slab_block_size = calculate_blocks_need(cache->header.obj_info.cache_size);
 	cache->num_of_obj = 0;
-	cache->header.obj_per_slab = 5;
+	cache->header.obj_per_slab = cache->header.slab_block_size * BLOCK_SIZE / cache->header.obj_info.cache_size;
 	cache->lists.free.head = 0;
 	cache->lists.half.head = 0;
 	cache->lists.full.head = 0;
 	cache->lists.free.tail = 0;
 	cache->lists.half.tail = 0;
 	cache->lists.full.tail = 0;
-	kmem_cache_shrink(cache);
+	kmem_cache_expand(cache);
 }
 void kmem_init(void* space, int block_num) {
 	num_of_blocks = block_num;
@@ -126,45 +151,67 @@ void kmem_init(void* space, int block_num) {
 	for (int i = 0; i < max_small_buff_size; i++) {
 		smallBuff[i] = NULL;
 	}
+	mutex = CreateMutex(0, 0, 0);
 }
 
 kmem_cache_t* kmem_cache_create(const char* name, size_t size,
 	void (*ctor)(void*), void (*dtor)(void*)) {
+	WaitForSingleObject(mutex, INFINITE);
 	kmem_cache_t* ret = kmem_cache_alloc(caches);
 	strcpy(ret->header.cache_name, name);
 	ret->header.obj_info.cache_ctor = ctor;
 	ret->header.obj_info.cache_dtor = dtor;
 	ret->header.obj_info.cache_size = size + sizeof(kmem_cache_t_obj_header);
 	ret->header.num_of_slabs = 0;
-	ret->header.slab_block_size = calculate_blocks_need(size);
+	ret->header.slab_block_size = calculate_blocks_need(ret->header.obj_info.cache_size);
 	ret->num_of_obj = 0;
-	ret->header.obj_per_slab = 5;
+	ret->header.obj_per_slab = ret->header.slab_block_size * BLOCK_SIZE / ret->header.obj_info.cache_size;
 	ret->lists.free.head = 0;
 	ret->lists.half.head = 0;
 	ret->lists.full.head = 0;
 	ret->lists.free.tail = 0;
 	ret->lists.half.tail = 0;
 	ret->lists.full.tail = 0;
-	if (kmem_cache_shrink(ret) == -1)
+	if (kmem_cache_expand(ret) == -1) {
+		ReleaseMutex(mutex);
 		return NULL;
+	}
+	ReleaseMutex(mutex);
 	return ret;
 }
 
-int kmem_cache_shrink(kmem_cache_t* cachep) {
+int kmem_cache_expand(kmem_cache_t* cachep) {
+	WaitForSingleObject(mutex, INFINITE);
 	kmem_cache_t_slab* curr = buddy_malloc(cachep->header.slab_block_size * BLOCK_SIZE + sizeof(kmem_cache_t_obj_header));
-	if (curr == NULL)
+	if (curr == NULL) {
+		ReleaseMutex(mutex);
 		return -1;
+	}
 	kmem_cache_t_list_elem* l = &cachep->lists.free;
 	addFromList(l, curr);
 	cachep->header.num_of_slabs++;
 	curr->curr_objects = 0;
 	curr->free = 0;
+	ReleaseMutex(mutex);
+	return 1;
+}
+
+int kmem_cache_shrink(kmem_cache_t* cachep) {
+	WaitForSingleObject(mutex, INFINITE);
+	while (cachep->lists.free.head) {
+		buddy_free(removeFromList(&cachep->lists.free));
+		cachep->header.num_of_slabs--;
+	}
+	//cachep->lists.free.head = 0;
+	//cachep->lists.free.tail = 0;
+	ReleaseMutex(mutex);
 	return 1;
 }
 
 void* kmem_cache_alloc(kmem_cache_t* cachep) {
 	if (!cachep)
 		return NULL;
+	WaitForSingleObject(mutex, INFINITE);
 	kmem_cache_t_list_elem* l = 0;
 	if (cachep->lists.half.head) {
 		l = &cachep->lists.half;
@@ -172,7 +219,11 @@ void* kmem_cache_alloc(kmem_cache_t* cachep) {
 		l = &cachep->lists.free;
 	}
 	if (!l) {
-		kmem_cache_shrink(cachep);
+		if (kmem_cache_expand(cachep) == -1) {
+			//printf("greska\n");
+			ReleaseMutex(mutex);
+			return NULL;
+		}
 		l = &cachep->lists.free;
 	}
 	kmem_cache_t_slab* slab_for_obj = removeFromList(l);
@@ -192,10 +243,13 @@ void* kmem_cache_alloc(kmem_cache_t* cachep) {
 	} else {
 		addFromList(&cachep->lists.half, slab_for_obj);
 	}
+	cachep->num_of_obj++;
+	ReleaseMutex(mutex);
 	return ret;
 }
 
 void kmem_cache_free(kmem_cache_t* cachep, void* objp) {
+	WaitForSingleObject(mutex, INFINITE);
 	cachep->num_of_obj--;
 	kmem_cache_t_obj_header* h = (char*)objp - sizeof(kmem_cache_t_obj_header);
 	kmem_cache_t_slab* cur = h->mySlab;
@@ -206,36 +260,55 @@ void kmem_cache_free(kmem_cache_t* cachep, void* objp) {
 	}
 	cur->curr_objects--;
 	addObjList(&cur->free, h);
+	ReleaseMutex(mutex);
 }
 
 void* kmalloc(size_t size) {
+	WaitForSingleObject(mutex, INFINITE);
 	uint ind = log2(size) - min_small_buff_pow;
 	if (!smallBuff[ind]) {
 		smallBuff[ind] = kmem_cache_create("mali bafer", size + sizeof(uint), NULL, NULL);
 	}
 	void* ret = kmem_cache_alloc(smallBuff[ind]);
 	*(uint*)ret = ind;
+	ReleaseMutex(mutex);
 	return (char*)ret + sizeof(uint);
 }
 
 void kfree(const void* objp) {
-	uint ind = (*(uint*)objp);
-	kmem_cache_free(smallBuff[ind], objp);
+	WaitForSingleObject(mutex, INFINITE);
+	uint ind = *(uint*)((char*)objp - sizeof(uint));
+	kmem_cache_free(smallBuff[ind], (char*)objp - sizeof(uint));
+	ReleaseMutex(mutex);
 }
 
 void kmem_cache_destroy(kmem_cache_t* cachep) {
-	kmem_cache_free(caches, cachep);
+	WaitForSingleObject(mutex, INFINITE);
 	while (cachep->lists.free.head)
 		buddy_free(removeFromList(&cachep->lists.free));
 	while (cachep->lists.full.head)
 		buddy_free(removeFromList(&cachep->lists.full));
 	while (cachep->lists.half.head)
 		buddy_free(removeFromList(&cachep->lists.half));
+	kmem_cache_free(caches, cachep);
+	ReleaseMutex(mutex);
 }
 
+
+/*informacije koje se stampaju za jedan kes su ime, velicina jednog podatka izrazena u
+bajtovima, velicina celog kesa izrazenog u broju blokova, broj ploca, broj objekata u jednoj
+ploci i procentualna popunjenost kesa. */
 void kmem_cache_info(kmem_cache_t* cachep) {
-	//kmem_cache_t_header* h = &cachep->header;
-	//printf("ime: %s\nvelicine: %d\n", h->cache_name, h->cache_size);
+	WaitForSingleObject(mutex, INFINITE);
+	printf("//////////////////////////\n");
+	printf("Ime kesa: %s\n", cachep->header.cache_name);
+	printf("Velicina jednog podatka: %d\n", cachep->header.obj_info.cache_size);
+	printf("Velicina kesa u blokovima: %d\n", cachep->header.num_of_slabs * cachep->header.slab_block_size);
+	printf("Broj ploca: %d\n", cachep->header.num_of_slabs);
+	printf("Broj objekat po ploci: %d\n", cachep->header.obj_per_slab);
+	printf("Popunjenost kesa: %f\n", (float)(cachep->header.obj_info.cache_size * cachep->num_of_obj) / (float)(cachep->header.num_of_slabs * cachep->header.slab_block_size * BLOCK_SIZE) * 100.0);
+	printf("//////////////////////////\n");
+	ReleaseMutex(mutex);
 }
 
 int kmem_cache_error(kmem_cache_t* cachep) { return 0; }

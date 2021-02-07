@@ -24,13 +24,16 @@
   <ItemGroup>
     <ClCompile Include="buddy_list.c" />
     <ClCompile Include="budyy.c" />
+    <ClCompile Include="main.c" />
     <ClCompile Include="slab.c" />
     <ClCompile Include="Source.c" />
+    <ClCompile Include="test.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="buddy.h" />
     <ClInclude Include="buddy_list.h" />
     <ClInclude Include="slab.h" />
+    <ClInclude Include="test.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
