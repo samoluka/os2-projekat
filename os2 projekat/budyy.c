@@ -116,6 +116,7 @@ void* buddy_malloc(size_t request) {
 		while (entry < original) {
 			index = left_child(index);
 			entry++;
+			//ova linija dodata radi predostroznosti
 			List_Node* budyy = (List_Node*)index_to_ptr(index + 1, entry);
 			if (!check_max(budyy)) {
 				break;
