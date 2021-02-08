@@ -20,6 +20,7 @@ typedef struct kmem_cache_t_obj_header kmem_cache_t_obj_header;
 #define max_small_buff_size (max_small_buff_pow - min_small_buff_pow)
 
 void* kmem_cache_alloc(kmem_cache_t* cachep);
+int kmem_cache_expand(kmem_cache_t* cachep);
 
 int num_of_blocks;
 void* startAdr;
@@ -40,15 +41,16 @@ typedef struct kmem_cache_t_slab {
 	void* prev;
 	kmem_cache_t_obj_header* free;
 	uint curr_objects;
+	uint object_start_offset;
 } kmem_cache_t_slab;
 typedef struct kmem_cache_t_lists {
 	kmem_cache_t_list_elem free, half, full;
 }kmem_cache_t_lists;
 
 typedef struct kmem_cache_t_object_info {
-	size_t cache_size;
-	void* cache_ctor;
-	void* cache_dtor;
+	size_t object_size;
+	void* object_ctor;
+	void* object_dtor;
 }kmem_cache_t_object_info;
 
 typedef struct kmem_cache_t_header {
@@ -62,6 +64,8 @@ typedef struct kmem_cache_s {
 	kmem_cache_t_header header;
 	kmem_cache_t_lists lists;
 	uint num_of_obj;
+	uint unused_space;
+	uint curr_offset;
 } kmem_cache_t;
 
 uint calculate_blocks_need(size_t space_needed) {
@@ -123,14 +127,14 @@ void* removeObjList(kmem_cache_t_obj_header* l) {
 	return ret;
 }
 void init_start_cache(kmem_cache_t* cache) {
-	cache->header.obj_info.cache_ctor = NULL;
-	cache->header.obj_info.cache_dtor = NULL;
+	cache->header.obj_info.object_ctor = NULL;
+	cache->header.obj_info.object_dtor = NULL;
 	strcpy(cache->header.cache_name, "kes kesova");
-	cache->header.obj_info.cache_size = sizeof(kmem_cache_t) + sizeof(kmem_cache_t_obj_header);
+	cache->header.obj_info.object_size = sizeof(kmem_cache_t) + sizeof(kmem_cache_t_obj_header);
 	cache->header.num_of_slabs = 0;
-	cache->header.slab_block_size = calculate_blocks_need(cache->header.obj_info.cache_size);
+	cache->header.slab_block_size = calculate_blocks_need(cache->header.obj_info.object_size);
 	cache->num_of_obj = 0;
-	cache->header.obj_per_slab = cache->header.slab_block_size * BLOCK_SIZE / cache->header.obj_info.cache_size;
+	cache->header.obj_per_slab = cache->header.slab_block_size * BLOCK_SIZE / cache->header.obj_info.object_size;
 	cache->lists.free.head = 0;
 	cache->lists.half.head = 0;
 	cache->lists.full.head = 0;
@@ -159,13 +163,15 @@ kmem_cache_t* kmem_cache_create(const char* name, size_t size,
 	WaitForSingleObject(mutex, INFINITE);
 	kmem_cache_t* ret = kmem_cache_alloc(caches);
 	strcpy(ret->header.cache_name, name);
-	ret->header.obj_info.cache_ctor = ctor;
-	ret->header.obj_info.cache_dtor = dtor;
-	ret->header.obj_info.cache_size = size + sizeof(kmem_cache_t_obj_header);
+	ret->header.obj_info.object_ctor = ctor;
+	ret->header.obj_info.object_dtor = dtor;
+	ret->header.obj_info.object_size = size + sizeof(kmem_cache_t_obj_header);
 	ret->header.num_of_slabs = 0;
-	ret->header.slab_block_size = calculate_blocks_need(ret->header.obj_info.cache_size);
+	ret->header.slab_block_size = calculate_blocks_need(ret->header.obj_info.object_size);
 	ret->num_of_obj = 0;
-	ret->header.obj_per_slab = ret->header.slab_block_size * BLOCK_SIZE / ret->header.obj_info.cache_size;
+	ret->header.obj_per_slab = (ret->header.slab_block_size * BLOCK_SIZE - sizeof(kmem_cache_t_slab)) / ret->header.obj_info.object_size;
+	ret->unused_space = ret->header.slab_block_size * BLOCK_SIZE - sizeof(kmem_cache_t_slab) - ret->header.obj_per_slab * ret->header.obj_info.object_size;
+	ret->curr_offset = 0;
 	ret->lists.free.head = 0;
 	ret->lists.half.head = 0;
 	ret->lists.full.head = 0;
@@ -190,6 +196,11 @@ int kmem_cache_expand(kmem_cache_t* cachep) {
 	kmem_cache_t_list_elem* l = &cachep->lists.free;
 	addFromList(l, curr);
 	cachep->header.num_of_slabs++;
+	if (cachep->curr_offset >= cachep->unused_space) {
+		cachep->curr_offset = 0;
+	}
+	curr->object_start_offset = cachep->curr_offset;
+	cachep->curr_offset += CACHE_L1_LINE_SIZE;
 	curr->curr_objects = 0;
 	curr->free = 0;
 	ReleaseMutex(mutex);
@@ -229,12 +240,12 @@ void* kmem_cache_alloc(kmem_cache_t* cachep) {
 	kmem_cache_t_slab* slab_for_obj = removeFromList(l);
 	void* ret;
 	if (!slab_for_obj->free)
-		ret = (char*)slab_for_obj + sizeof(kmem_cache_t_slab) + slab_for_obj->curr_objects * cachep->header.obj_info.cache_size;
+		ret = (char*)slab_for_obj + slab_for_obj->object_start_offset + sizeof(kmem_cache_t_slab) + slab_for_obj->curr_objects * cachep->header.obj_info.object_size;
 	else
 		ret = removeObjList(slab_for_obj->free);
 	((kmem_cache_t_obj_header*)ret)->mySlab = slab_for_obj;
 	ret = (char*)ret + sizeof(kmem_cache_t_obj_header);
-	void (*ctor)(void*) = cachep->header.obj_info.cache_ctor;
+	void (*ctor)(void*) = cachep->header.obj_info.object_ctor;
 	if (ctor)
 		ctor(ret);
 	slab_for_obj->curr_objects++;
@@ -302,11 +313,11 @@ void kmem_cache_info(kmem_cache_t* cachep) {
 	WaitForSingleObject(mutex, INFINITE);
 	printf("//////////////////////////\n");
 	printf("Ime kesa: %s\n", cachep->header.cache_name);
-	printf("Velicina jednog podatka: %d\n", cachep->header.obj_info.cache_size);
+	printf("Velicina jednog podatka: %d\n", cachep->header.obj_info.object_size);
 	printf("Velicina kesa u blokovima: %d\n", cachep->header.num_of_slabs * cachep->header.slab_block_size);
 	printf("Broj ploca: %d\n", cachep->header.num_of_slabs);
 	printf("Broj objekat po ploci: %d\n", cachep->header.obj_per_slab);
-	printf("Popunjenost kesa: %f\n", (float)(cachep->header.obj_info.cache_size * cachep->num_of_obj) / (float)(cachep->header.num_of_slabs * cachep->header.slab_block_size * BLOCK_SIZE) * 100.0);
+	printf("Popunjenost kesa: %f\n", (float)(cachep->header.obj_info.object_size * cachep->num_of_obj) / (float)(cachep->header.num_of_slabs * cachep->header.slab_block_size * BLOCK_SIZE) * 100.0);
 	printf("//////////////////////////\n");
 	ReleaseMutex(mutex);
 }
