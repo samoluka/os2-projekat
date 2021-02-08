@@ -66,6 +66,7 @@ typedef struct kmem_cache_s {
 	uint num_of_obj;
 	uint unused_space;
 	uint curr_offset;
+	int error_code;
 } kmem_cache_t;
 
 uint calculate_blocks_need(size_t space_needed) {
@@ -178,6 +179,7 @@ kmem_cache_t* kmem_cache_create(const char* name, size_t size,
 	ret->lists.free.tail = 0;
 	ret->lists.half.tail = 0;
 	ret->lists.full.tail = 0;
+	ret->error_code = 0;
 	if (kmem_cache_expand(ret) == -1) {
 		ReleaseMutex(mutex);
 		return NULL;
@@ -190,6 +192,7 @@ int kmem_cache_expand(kmem_cache_t* cachep) {
 	WaitForSingleObject(mutex, INFINITE);
 	kmem_cache_t_slab* curr = buddy_malloc(cachep->header.slab_block_size * BLOCK_SIZE + sizeof(kmem_cache_t_obj_header));
 	if (curr == NULL) {
+		cachep->error_code = 1;
 		ReleaseMutex(mutex);
 		return -1;
 	}
@@ -295,6 +298,11 @@ void kfree(const void* objp) {
 
 void kmem_cache_destroy(kmem_cache_t* cachep) {
 	WaitForSingleObject(mutex, INFINITE);
+	if (cachep->num_of_obj) {
+		cachep->error_code = 2;
+		ReleaseMutex(mutex);
+		return;
+	}
 	while (cachep->lists.free.head)
 		buddy_free(removeFromList(&cachep->lists.free));
 	while (cachep->lists.full.head)
@@ -322,4 +330,21 @@ void kmem_cache_info(kmem_cache_t* cachep) {
 	ReleaseMutex(mutex);
 }
 
-int kmem_cache_error(kmem_cache_t* cachep) { return 0; }
+int kmem_cache_error(kmem_cache_t* cachep) {
+	WaitForSingleObject(mutex,INFINITE);
+	switch (cachep->error_code) {
+	case 1:
+		printf("Neusesno prosirenje kesa\n");
+		return 1;
+	case 2:
+		printf("Pokusaj destroy dok postoje objekti u kesu\n");
+		break;
+	case 0:
+		printf("Nije bilo nikakve greske\n");
+		break;
+	default:
+		break;
+	}
+	ReleaseMutex(mutex);
+	return cachep->error_code;
+}

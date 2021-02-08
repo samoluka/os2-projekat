@@ -44,8 +44,6 @@ void work(void* pdata) {
 	struct objects_s *objs = (struct objects_s*)(kmalloc(sizeof(struct objects_s) * data.iterations));
 
 	for (int i = 0; i < data.iterations; i++) {
-		kmem_cache_shrink(cache);
-		kmem_cache_shrink(data.shared);
 		if (i % 100 == 0) {
 			objs[size].data = kmem_cache_alloc(data.shared);
 			objs[size].cache = data.shared;
@@ -56,7 +54,6 @@ void work(void* pdata) {
 			objs[size].cache = cache;
 			memset(objs[size].data, MASK, data.id);
 		}
-		kmem_cache_shrink(objs->cache);
 		size++;
 	}
 
@@ -69,6 +66,7 @@ void work(void* pdata) {
 	}
 
 	kfree(objs);
+	kmem_cache_error(cache);
 	kmem_cache_destroy(cache);
 }
 
