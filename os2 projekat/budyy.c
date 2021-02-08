@@ -76,11 +76,12 @@ int build_tree(uint entry) {
 	return 1;
 }
 void* buddy_malloc(size_t request) {
+	WaitForSingleObject(mutex, INFINITE);
 	size_t real_request = request + header_size;
 	if (real_request > max_Alloc || !check_max((char*)start_Adr + real_request)) {
+		ReleaseMutex(mutex);
 		return NULL;
 	}
-	WaitForSingleObject(mutex, INFINITE);
 	uint entry = find(real_request), original = entry;
 	while (entry + 1 != 0) {
 		char* ret;
@@ -115,8 +116,12 @@ void* buddy_malloc(size_t request) {
 		while (entry < original) {
 			index = left_child(index);
 			entry++;
+			List_Node* budyy = (List_Node*)index_to_ptr(index + 1, entry);
+			if (!check_max(budyy)) {
+				break;
+			}
 			invers_split(parent(index));
-			add(&all_Lists[entry], (List_Node*)index_to_ptr(index + 1, entry));
+			add(&all_Lists[entry], budyy);
 		}
 		((List_Node*)ret)->size = real_request;
 		ReleaseMutex(mutex);

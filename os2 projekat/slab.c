@@ -148,7 +148,7 @@ void kmem_init(void* space, int block_num) {
 	num_of_blocks = block_num;
 	startAdr = space;
 	int log_num_of_blocks = log2(num_of_blocks);
-	buddy_init(space, log2_block_size, log2_block_size + log_num_of_blocks + 1,
+	buddy_init(space, log2_block_size, log2_block_size + log_num_of_blocks+1,
 		(char*)space + 3 * BLOCK_SIZE, (char*)space + block_num * BLOCK_SIZE);
 	caches = (char*)space + 2 * BLOCK_SIZE;
 	init_start_cache(caches);
