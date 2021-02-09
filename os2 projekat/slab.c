@@ -5,6 +5,7 @@
 #include <string.h>
 #include <Windows.h>
 #include <stdio.h>
+#include "buddy_list.h"
 
 typedef unsigned int uint;
 typedef unsigned char uint8;
@@ -148,7 +149,7 @@ void kmem_init(void* space, int block_num) {
 	num_of_blocks = block_num;
 	startAdr = space;
 	int log_num_of_blocks = log2(num_of_blocks);
-	buddy_init(space, log2_block_size, log2_block_size + log_num_of_blocks+1,
+	buddy_init(space, log2_block_size, log2_block_size + log_num_of_blocks + 1,
 		(char*)space + 3 * BLOCK_SIZE, (char*)space + block_num * BLOCK_SIZE);
 	caches = (char*)space + 2 * BLOCK_SIZE;
 	init_start_cache(caches);
@@ -171,7 +172,7 @@ kmem_cache_t* kmem_cache_create(const char* name, size_t size,
 	ret->header.slab_block_size = calculate_blocks_need(ret->header.obj_info.object_size);
 	ret->num_of_obj = 0;
 	ret->header.obj_per_slab = (ret->header.slab_block_size * BLOCK_SIZE - sizeof(kmem_cache_t_slab)) / ret->header.obj_info.object_size;
-	ret->unused_space = ret->header.slab_block_size * BLOCK_SIZE - sizeof(kmem_cache_t_slab) - ret->header.obj_per_slab * ret->header.obj_info.object_size;
+	ret->unused_space = ret->header.slab_block_size * BLOCK_SIZE - sizeof(kmem_cache_t_slab) - sizeof(List_Node) - ret->header.obj_per_slab * ret->header.obj_info.object_size;
 	ret->curr_offset = 0;
 	ret->lists.free.head = 0;
 	ret->lists.half.head = 0;
@@ -264,6 +265,13 @@ void* kmem_cache_alloc(kmem_cache_t* cachep) {
 
 void kmem_cache_free(kmem_cache_t* cachep, void* objp) {
 	WaitForSingleObject(mutex, INFINITE);
+	void (*dtor)(void*) = cachep->header.obj_info.object_dtor;
+	if (dtor)
+		dtor(objp);
+	//ovo treba da bi objekat mogao opet da se iskoristi
+	//void (*ctor)(void*) = cachep->header.obj_info.object_ctor;
+	//if (ctor)
+	//	ctor(objp);
 	cachep->num_of_obj--;
 	kmem_cache_t_obj_header* h = (char*)objp - sizeof(kmem_cache_t_obj_header);
 	kmem_cache_t_slab* cur = h->mySlab;
@@ -331,7 +339,7 @@ void kmem_cache_info(kmem_cache_t* cachep) {
 }
 
 int kmem_cache_error(kmem_cache_t* cachep) {
-	WaitForSingleObject(mutex,INFINITE);
+	WaitForSingleObject(mutex, INFINITE);
 	switch (cachep->error_code) {
 	case 1:
 		printf("Neusesno prosirenje kesa\n");
