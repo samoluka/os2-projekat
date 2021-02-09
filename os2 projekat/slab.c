@@ -68,19 +68,20 @@ typedef struct kmem_cache_s {
 	uint unused_space;
 	uint curr_offset;
 	int error_code;
+	HANDLE mutex;
 } kmem_cache_t;
 
 uint calculate_blocks_need(size_t space_needed) {
-	WaitForSingleObject(mutex, INFINITE);
+	//WaitForSingleObject(mutex, INFINITE);
 	int ret = 1;
 	while (!(ret * BLOCK_SIZE > space_needed)) {
 		ret *= 2;
 	}
-	ReleaseMutex(mutex);
+	//ReleaseMutex(mutex);
 	return ret;
 }
 void addFromList(kmem_cache_t_list_elem* list, kmem_cache_t_slab* elem) {
-	WaitForSingleObject(mutex, INFINITE);
+	//WaitForSingleObject(mutex, INFINITE);
 	if (list->tail) {
 		elem->prev = list->tail;
 		list->tail = list->tail->next = elem;
@@ -88,18 +89,18 @@ void addFromList(kmem_cache_t_list_elem* list, kmem_cache_t_slab* elem) {
 		elem->prev = elem->next = elem;
 		list->head = list->tail = elem;
 	}
-	ReleaseMutex(mutex);
+	//ReleaseMutex(mutex);
 }
 kmem_cache_t_slab* removeFromList(kmem_cache_t_list_elem* list) {
 	if (!list->head || !list->tail)
 		return NULL;
-	WaitForSingleObject(mutex, INFINITE);
+	//WaitForSingleObject(mutex, INFINITE);
 	kmem_cache_t_slab* ret;
 	if (!list->head->prev) {
 		ret = list->head;
 		list->head = NULL;
 		list->tail = NULL;
-		ReleaseMutex(mutex);
+		//ReleaseMutex(mutex);
 		return ret;
 	}
 	if (list->head->prev == list->head) {
@@ -112,20 +113,20 @@ kmem_cache_t_slab* removeFromList(kmem_cache_t_list_elem* list) {
 	}
 	ret->next = NULL;
 	ret->prev = NULL;
-	ReleaseMutex(mutex);
+	//ReleaseMutex(mutex);
 	return ret;
 }
 void addObjList(kmem_cache_t_obj_header** l, kmem_cache_t_obj_header* elem) {
-	WaitForSingleObject(mutex, INFINITE);
+	//WaitForSingleObject(mutex, INFINITE);
 	elem->next = *l;
 	*l = elem;
-	ReleaseMutex(mutex);
+	//ReleaseMutex(mutex);
 }
 void* removeObjList(kmem_cache_t_obj_header* l) {
-	WaitForSingleObject(mutex, INFINITE);
+	//WaitForSingleObject(mutex, INFINITE);
 	void* ret = l;
 	l = l->next;
-	ReleaseMutex(mutex);
+	//ReleaseMutex(mutex);
 	return ret;
 }
 void init_start_cache(kmem_cache_t* cache) {
@@ -162,7 +163,7 @@ void kmem_init(void* space, int block_num) {
 
 kmem_cache_t* kmem_cache_create(const char* name, size_t size,
 	void (*ctor)(void*), void (*dtor)(void*)) {
-	WaitForSingleObject(mutex, INFINITE);
+	//WaitForSingleObject(mutex, INFINITE);
 	kmem_cache_t* ret = kmem_cache_alloc(caches);
 	strcpy(ret->header.cache_name, name);
 	ret->header.obj_info.object_ctor = ctor;
@@ -180,21 +181,22 @@ kmem_cache_t* kmem_cache_create(const char* name, size_t size,
 	ret->lists.free.tail = 0;
 	ret->lists.half.tail = 0;
 	ret->lists.full.tail = 0;
+	ret->mutex = CreateMutex(0, 0, 0);
 	ret->error_code = 0;
 	if (kmem_cache_expand(ret) == -1) {
-		ReleaseMutex(mutex);
+		//ReleaseMutex(mutex);
 		return NULL;
 	}
-	ReleaseMutex(mutex);
+	//ReleaseMutex(mutex);
 	return ret;
 }
 
 int kmem_cache_expand(kmem_cache_t* cachep) {
-	WaitForSingleObject(mutex, INFINITE);
+	WaitForSingleObject(cachep->mutex, INFINITE);
 	kmem_cache_t_slab* curr = buddy_malloc(cachep->header.slab_block_size * BLOCK_SIZE + sizeof(kmem_cache_t_obj_header));
 	if (curr == NULL) {
 		cachep->error_code = 1;
-		ReleaseMutex(mutex);
+		ReleaseMutex(cachep->mutex);
 		return -1;
 	}
 	kmem_cache_t_list_elem* l = &cachep->lists.free;
@@ -207,26 +209,26 @@ int kmem_cache_expand(kmem_cache_t* cachep) {
 	cachep->curr_offset += CACHE_L1_LINE_SIZE;
 	curr->curr_objects = 0;
 	curr->free = 0;
-	ReleaseMutex(mutex);
+	ReleaseMutex(cachep->mutex);
 	return 1;
 }
 
 int kmem_cache_shrink(kmem_cache_t* cachep) {
-	WaitForSingleObject(mutex, INFINITE);
+	WaitForSingleObject(cachep->mutex, INFINITE);
 	while (cachep->lists.free.head) {
 		buddy_free(removeFromList(&cachep->lists.free));
 		cachep->header.num_of_slabs--;
 	}
 	//cachep->lists.free.head = 0;
 	//cachep->lists.free.tail = 0;
-	ReleaseMutex(mutex);
+	ReleaseMutex(cachep->mutex);
 	return 1;
 }
 
 void* kmem_cache_alloc(kmem_cache_t* cachep) {
 	if (!cachep)
 		return NULL;
-	WaitForSingleObject(mutex, INFINITE);
+	WaitForSingleObject(cachep->mutex, INFINITE);
 	kmem_cache_t_list_elem* l = 0;
 	if (cachep->lists.half.head) {
 		l = &cachep->lists.half;
@@ -236,7 +238,7 @@ void* kmem_cache_alloc(kmem_cache_t* cachep) {
 	if (!l) {
 		if (kmem_cache_expand(cachep) == -1) {
 			//printf("greska\n");
-			ReleaseMutex(mutex);
+			ReleaseMutex(cachep->mutex);
 			return NULL;
 		}
 		l = &cachep->lists.free;
@@ -259,12 +261,12 @@ void* kmem_cache_alloc(kmem_cache_t* cachep) {
 		addFromList(&cachep->lists.half, slab_for_obj);
 	}
 	cachep->num_of_obj++;
-	ReleaseMutex(mutex);
+	ReleaseMutex(cachep->mutex);
 	return ret;
 }
 
 void kmem_cache_free(kmem_cache_t* cachep, void* objp) {
-	WaitForSingleObject(mutex, INFINITE);
+	WaitForSingleObject(cachep->mutex, INFINITE);
 	void (*dtor)(void*) = cachep->header.obj_info.object_dtor;
 	if (dtor)
 		dtor(objp);
@@ -282,7 +284,7 @@ void kmem_cache_free(kmem_cache_t* cachep, void* objp) {
 	}
 	cur->curr_objects--;
 	addObjList(&cur->free, h);
-	ReleaseMutex(mutex);
+	ReleaseMutex(cachep->mutex);
 }
 
 void* kmalloc(size_t size) {
@@ -305,10 +307,10 @@ void kfree(const void* objp) {
 }
 
 void kmem_cache_destroy(kmem_cache_t* cachep) {
-	WaitForSingleObject(mutex, INFINITE);
+	FWaitForSingleObject(cachep->mutex, INFINITE);
 	if (cachep->num_of_obj) {
 		cachep->error_code = 2;
-		ReleaseMutex(mutex);
+		ReleaseMutex(cachep->mutex);
 		return;
 	}
 	while (cachep->lists.free.head)
@@ -318,7 +320,7 @@ void kmem_cache_destroy(kmem_cache_t* cachep) {
 	while (cachep->lists.half.head)
 		buddy_free(removeFromList(&cachep->lists.half));
 	kmem_cache_free(caches, cachep);
-	ReleaseMutex(mutex);
+	ReleaseMutex(cachep->mutex);
 }
 
 
