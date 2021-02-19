@@ -307,7 +307,7 @@ void kfree(const void* objp) {
 }
 
 void kmem_cache_destroy(kmem_cache_t* cachep) {
-	FWaitForSingleObject(cachep->mutex, INFINITE);
+	WaitForSingleObject(cachep->mutex, INFINITE);
 	if (cachep->num_of_obj) {
 		cachep->error_code = 2;
 		ReleaseMutex(cachep->mutex);
